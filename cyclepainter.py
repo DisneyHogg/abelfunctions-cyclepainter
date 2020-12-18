@@ -230,25 +230,37 @@ class CyclePainterPath:
         # taking the intersection of a cycle with the same path but shifted by origin sheet. 
         # Here, previously cyclepainter was detecting the artefact intersection depending on orientation.
         # Now we robustly detect these, we need to know they are artefacts caused by branch cut. 
-        # Here we use the genericity of the prblem to assume all these endpoint intersections are artefacts. 
+        # Here we use the genericity of the prblem to assume all these endpoint intersections are artefacts.
+
+        # A point that should be made is that the intersection number should be an antisymmetric operator on paths.
+        # Perhaps there is a way to design this to take this knowledge into account? 
         intersections = 0
         for l, s in zip(self.lines, self.sheets):
             for ll, ss in zip(path.lines, path.sheets):
                 if s == ss:
                     if intersect(l[0], l[1], ll[0], ll[1]):
                         intersection_point = intersection(l[0], l[1], ll[0], ll[1])
+                        # Note both of the following conditions exclude the monodromy point from being captured as an intersection here
+                        # Can we remove the former to include reliability?
                         if ((dist(intersection_point, (np.real(self.cp.monodromy_point),  np.imag(self.cp.monodromy_point))) > eps) and not (l[1]==ll[0] or l[0] == ll[1])):
                             intersections += 1 if ccw(l[0], intersection_point, ll[1]) else -1
 
-        # around the monodromy point
+        # Near the monodromy point, if the start sheet is equal on both paths, they both intersect at the monodromy point. 
+        # We make the assumption that on this initial segment they only intersect at the monodromy point. 
+        # Note this is ensured if the initial segments are not identical, which we will generically have.
+        # Note that this method is not resilient to long paths, where a point at a small proportion along the curve could correspond to a large distance from the monodromy point. 
         if path.sheets[0] == self.sheets[0]:
             e = (np.real(np.complex(self.get_x(1.-1e-9))), np.imag(np.complex(self.get_x(1.-1e-9))))
             s = (np.real(np.complex(self.get_x(1e-9))), np.imag(np.complex(self.get_x(1e-9))))
             ee = (np.real(np.complex(path.get_x(1.-1e-9))), np.imag(np.complex(path.get_x(1.-1e-9))))
             ss = (np.real(np.complex(path.get_x(1e-9))), np.imag(np.complex(path.get_x(1e-9))))
-            if intersect(e, s, ee, ss):
-                intersection_point = intersection(e, s, ee, ss)
-                intersections += 1 if ccw(e, intersection_point, ss) else -1
+            # We can use this line as we know that the way the method is built, the path must start at the monodromy point, which is the intersection here.
+            intersection_point=self.lines[0][0]
+            if bool(ccw(intersection_point,s,ss) == ccw(intersection_point,e,ee)):
+                intersections += 1 if ccw(intersection_point,s,ss) else -1 
+            #if intersect(e, s, ee, ss):
+            #    intersection_point = intersection(e, s, ee, ss)
+            #    intersections += 1 if ccw(e, intersection_point, ss) else -1
 
         return intersections
 
