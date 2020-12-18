@@ -256,7 +256,7 @@ class CyclePainterPath:
             ss = (np.real(np.complex(path.get_x(1e-9))), np.imag(np.complex(path.get_x(1e-9))))
             # We can use this line as we know that the way the method is built, the path must start at the monodromy point, which is the intersection here.
             intersection_point=self.lines[0][0]
-            if bool(ccw(intersection_point,s,ss) == ccw(intersection_point,e,ee)):
+            if bool(ccw(intersection_point,s,ss) == ccw(intersection_point,e,ee) and ccw(intersection_point,s,ee) != ccw(intersection_point,e,ss)):
                 intersections += 1 if ccw(intersection_point,s,ss) else -1 
             #if intersect(e, s, ee, ss):
             #    intersection_point = intersection(e, s, ee, ss)
@@ -636,7 +636,7 @@ class CyclePainter:
         # It would be nice to implement something that labels the path when multiple are plotted concurrently.
         ##############
         for pn in path_names:
-            self.plot_path(pn, clear=False)
+            self.plot_path(pn, clear_prev=False)
 
 
     def saved_paths(self):
