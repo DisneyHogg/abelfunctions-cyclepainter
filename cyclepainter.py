@@ -619,7 +619,10 @@ class CyclePainter:
 
     def plot_paths(self, path_names):
         # A version of plot_path to simplify the plotting of multiple paths simultaneously.
-        # path_names must be a list of strings giving the names as in plot_path. 
+        # path_names must be a list of strings giving the names as in plot_path.
+        ### REMARK ###
+        # It would be nice to implement something that labels the path when multiple are plotted concurrently.
+        ##############
         for pn in path_names:
             self.plot_path(pn, clear=False)
 
