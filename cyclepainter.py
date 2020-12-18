@@ -609,11 +609,11 @@ class CyclePainter:
             return
         return self.PATHS[path_name]
 
-    def plot_path(self, path_name):
+    def plot_path(self, path_name, clear_prev=True):
         if not path_name in self.PATHS:
             print('Fail: The path with name "{:s}" does not exist.'.format(path_name))
             return
-        self.PATHS[path_name].display()
+        self.PATHS[path_name].display(clear=clear_prev)
 
     def saved_paths(self):
         print('Saved paths:')
