@@ -610,10 +610,19 @@ class CyclePainter:
         return self.PATHS[path_name]
 
     def plot_path(self, path_name, clear_prev=True):
+        # Method to draw a path on the figure
+        # path_name must be a string, and the path object itself. 
         if not path_name in self.PATHS:
             print('Fail: The path with name "{:s}" does not exist.'.format(path_name))
             return
         self.PATHS[path_name].display(clear=clear_prev)
+
+    def plot_paths(self, path_names):
+        # A version of plot_path to simplify the plotting of multiple paths simultaneously.
+        # path_names must be a list of strings giving the names as in plot_path. 
+        for pn in path_names:
+            self.plot_path(pn, clear=False)
+
 
     def saved_paths(self):
         print('Saved paths:')
