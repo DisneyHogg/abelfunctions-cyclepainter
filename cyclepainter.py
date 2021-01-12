@@ -245,7 +245,7 @@ class CyclePainterPath:
                         if ((dist(intersection_point, (np.real(self.cp.monodromy_point),  np.imag(self.cp.monodromy_point))) > eps) and not (l[1]==ll[0] or l[0] == ll[1])):
                             intersections += 1 if ccw(l[0], intersection_point, ll[1]) else -1
 
-        # Near the monodromy point, if the start sheet is equal on both paths, they both intersect at the monodromy point. 
+        # Near the monodromy point, if the start sheet is equal on both paths, they both intersect at the monodromy point, provided they can't be deformed apart. 
         # We make the assumption that on this initial segment they only intersect at the monodromy point. 
         # Note this is ensured if the initial segments are not identical, which we will generically have.
         # Note that this method is not resilient to long paths, where a point at a small proportion along the curve could correspond to a large distance from the monodromy point. 
@@ -256,12 +256,20 @@ class CyclePainterPath:
             ss = (np.real(np.complex(path.get_x(1e-9))), np.imag(np.complex(path.get_x(1e-9))))
             # We can use this line as we know that the way the method is built, the path must start at the monodromy point, which is the intersection here.
             intersection_point=self.lines[0][0]
-            if bool(ccw(intersection_point,s,ss) == ccw(intersection_point,e,ee) and ccw(intersection_point,s,ee) != ccw(intersection_point,e,ss)):
-                intersections += 1 if ccw(intersection_point,s,ss) else -1 
-            #if intersect(e, s, ee, ss):
-            #    intersection_point = intersection(e, s, ee, ss)
-            #    intersections += 1 if ccw(e, intersection_point, ss) else -1
-
+            # This conditional should check if the paths can be deformed apart.
+            # This should be done by checking if the curves cross rather than just touching.
+            # THE FOLLOWING IF STATEMENT IS FLAWED, AND THE CORRESPONDING CODE SECTION IS MESSY
+            # THIS REFLECTS DIFFICULTY GETTING A RELIABLE METHOD. 
+            # if bool(ccw(intersection_point,s,ss) == ccw(intersection_point,e,ee) and ccw(intersection_point,s,ee) != ccw(intersection_point,e,ss)):
+            w = np.array([0,0,1,1])
+            if not (np.prod(np.diff(w[np.argsort([arctan2(*tuple(np.subtract(v,intersection_point))) for v in [e,s,ee,ss]])]))==0):
+                #intersections += 1 if ccw(e,intersection_point,ss) else -1
+                # I DON'T CURRENTLY UNDERSTAND THE BEST WAY TO SIGN THIS INTERACTION, DISCUSS. 
+                intersections += 1 if ccw(intersection_point,s,ss) else -1
+                # HERE FOLLOWS THE ORIGINAL METHOD FOR COUNTING THE INTERSECTION AT THE MONODROMY POINT.
+                #if intersect(e, s, ee, ss):
+                #    intersection_point = intersection(e, s, ee, ss)
+                #    intersections += 1 if ccw(e, intersection_point, ss) else -1
         return intersections
 
     def apply_automorphism(self, f, fineness=200):
