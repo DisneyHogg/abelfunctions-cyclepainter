@@ -12,8 +12,11 @@ from abelfunctions import *
 from abelfunctions.complex_path import ComplexLine
 from abelfunctions.utilities import Permutation, matching_permutation
 
+####################
+####################
+# Utility methods
 
-
+# An analogue to dist is now implemented in one of python/sage? Investigate removing this.
 def dist(p1, p2):
     ''' UTILITY method for euclidean distance '''
     return ((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)**0.5
@@ -68,6 +71,8 @@ def intersection(v1, v2, v3, v4):
         py = float((x1*y2 - y1*x2)*(y3 - y4) - (y1 - y2)*(x3*y4 - y3*x4))
         return (px/d, py/d)
 
+####################
+####################
 
 class BranchPoint:
 
@@ -127,10 +132,12 @@ class BranchPoint:
     def show_permutation_path(self):
         self.permutation_path.display()
 
+####################
+####################
 
 class CyclePainterPath:
 
-    def __init__(self, projection_points, starting_sheet, cyclepainter, build_surface=True, color_sheets=True):
+    def __init__(self, projection_points, starting_sheet, cyclepainter, build_surface=True, color_sheets=True, starting_sheet_ordering=None, base_point=None):
         projection_points = [np.complex(x) for x in projection_points]
         self.starting_sheet = starting_sheet
         self.projection_points = projection_points
@@ -141,7 +148,12 @@ class CyclePainterPath:
             for i in range(1, len(projection_points)-1):
                 path = path + ComplexLine(projection_points[i], projection_points[i+1])
                 self._path = path
-            self.surface_path = self.cp.surface._path_factory.RiemannSurfacePath_from_complex_path(path)
+            self.surface_path = self.cp.surface._path_factory.RiemannSurfacePath_from_complex_path(path, x0=base_point, y0=starting_sheet_ordering)
+            # Previously, when trying to save a path that doesn't go through the monodromy point, e.g. one obtained by applying an automorphism
+            # the above line fails. This is as in abelfunctions it was expecting the path to start at the monodromy point, and for the sheet 
+            # specification to corresponding to the preimage of the monodromy point. 
+            # To fix this we allow one to edit these in the specific case that the curve does not start from mp.
+            # See riemann_surface_path_factory.py in abelfunctions for more detail. 
         else:
             self.surface_path = None
 
@@ -272,13 +284,15 @@ class CyclePainterPath:
                 #    intersections += 1 if ccw(e, intersection_point, ss) else -1
         return intersections
 
-    def apply_automorphism(self, f, fineness=200):
+    def apply_automorphism(self, f, fineness=200, clear=True):
         image = [f(self.get_x(t), self.get_y(t)[self.starting_sheet])[0] for t in np.arange(0, 1.+1./fineness, 1./fineness)]
         self.cp.path_builder.start(from_monodromy=False)
         for x in image:
             self.cp.path_builder.add(x)
-        self.cp.path_builder.finish(to_monodromy=False)
+        self.cp.path_builder.finish(to_monodromy=False, clear=clear)
 
+####################
+####################
 
 class PathBuilder:
     def __init__(self, cp):
@@ -291,12 +305,12 @@ class PathBuilder:
         self.points = [self.cp.monodromy_point] if from_monodromy else []
         self.state = 'on'
 
-    def finish(self, event=None, to_monodromy=True):
+    def finish(self, event=None, to_monodromy=True, clear=True):
         if self.state == 'on':
             if to_monodromy:
                 self.points.append(self.cp.monodromy_point)
             self.state = 'off'
-            self.display()
+            self.display(clear)
 
     def undo(self, event=None):
         if self.state == 'on':
@@ -325,17 +339,16 @@ class PathBuilder:
                 self.add(x[0] + I*x[1])
                 self.display()
 
-    def display(self):
+    def display(self, clear=True):
+        # We allow for the ability to not clear the previous path. Currently this is primarily implemented for applying automorphisms. 
         if len(self.points) > 1:
-            CyclePainterPath(self.points, self.cp.radio_sheet, self.cp, build_surface=False).display()
+            CyclePainterPath(self.points, self.cp.radio_sheet, self.cp, build_surface=False).display(clear)
 
-    def _get_CyclePainterPath(self):
-        return CyclePainterPath(self.points, self.cp.radio_sheet, self.cp)
+    def _get_CyclePainterPath(self, base_point=None, starting_sheet_ordering=None):
+        return CyclePainterPath(self.points, self.cp.radio_sheet, self.cp, base_point=base_point, starting_sheet_ordering=starting_sheet_ordering)
 
-
-
-
-
+####################
+####################
 
 class CyclePainter:
     r"""
@@ -359,7 +372,7 @@ class CyclePainter:
         and 3) no angle <bi-pc-bj should be too small. 
 
     """
-    def __init__(self, curve=None, initial_monodromy_point=None, cut_point=None, kappa=3./5.):
+    def __init__(self, curve=None, initial_monodromy_point=None, cut_point=None, kappa=3./5., name='CyclePainter'):
         #####################
         # mathematical
         #####################
@@ -388,6 +401,9 @@ class CyclePainter:
         self.path_builder = PathBuilder(self)
         self.sheet_color_map = dict(enumerate(plt.cm.rainbow(np.linspace(0, 1, self.degree))))
         self.PATHS = {}
+        # We allow one to name the cyclepainter object, intended to allow the user to give a common language reference corresponding to the curve.
+        # The name is also eventually used as the title for the figure.
+        self.name = name
 
         #####################
         # computing values
@@ -518,7 +534,7 @@ class CyclePainter:
         self.ax.xaxis.set_label_coords(1.05, 0)
         self.ax.set_ylabel('Im')
         self.ax.yaxis.set_label_coords(0, 1.05)
-        self.ax.set_title('CyclePainter 2: Auckland', family='DejaVu Sans')
+        self.ax.set_title(self.name, family='DejaVu Sans')
 
 
 
@@ -602,14 +618,19 @@ class CyclePainter:
         self.pause_button.on_clicked(self.path_builder.reverse)
         self.pause_button.label.set_fontsize(6)
 
-    def save_path(self, path_name):
+    def save_path(self, path_name, monodromy_based=True, base_point=None, starting_sheet_ordering=None):
+        # Note that when saving paths, you should check that only one path is currently plotted to avoid confusion and errors.
         if path_name in self.PATHS:
             print('Fail: The path with name "{:s}" already exists.'.format(path_name))
             return
         if self.path_builder.state != 'off':
             print('Fail: The currently built path is not finished.')
             return
-        p = self.path_builder._get_CyclePainterPath()
+        if monodromy_based:
+            p = self.path_builder._get_CyclePainterPath()
+        else:
+            p = self.path_builder._get_CyclePainterPath(base_point=base_point, starting_sheet_ordering=starting_sheet_ordering)
+            # This is implemented in case you have a path not based at the monodromy point that you wish to save, for which previously there were errors. 
         if not p.is_closed():
             print('Warning: The path is not closed.')
         self.PATHS[path_name] = p
