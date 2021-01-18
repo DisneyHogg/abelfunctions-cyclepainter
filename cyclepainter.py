@@ -225,8 +225,11 @@ class CyclePainterPath:
         tmp = y0[self.starting_sheet]
         del y0[self.starting_sheet]
         y0 = np.array([tmp] + y0)
-
-        sp = self.cp.surface._path_factory.RiemannSurfacePath_from_complex_path(self._path, y0=y0)
+        # We modify this method to make use of the previously calculated surface path if it exists. 
+        if self.surface_path != None:
+            sp = self.surface_path
+        else:
+            sp = self.cp.surface._path_factory.RiemannSurfacePath_from_complex_path(self._path, y0=y0)
         return sp.integrate(omega)
 
     def intersection_number(self, path, eps=1e-10):
