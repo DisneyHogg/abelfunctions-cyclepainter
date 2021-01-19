@@ -138,8 +138,20 @@ class BranchPoint:
 class CyclePainterPath:
 
     def __init__(self, projection_points, starting_sheet, cyclepainter, build_surface=True, color_sheets=True, starting_sheet_ordering=None, base_point=None):
+        # Maybe change these to be more relevant in the future, but for now they are sufficient for pickling paths. 
+        self.base_point = base_point
+        self.starting_sheet_ordering = starting_sheet_ordering
         # We have the issue that if we are not based at the monodromy point, we need to check for consistency between starting_sheet and starting_sheet_ordering
-        #if (base_point != None and base_point != )
+        if starting_sheet_ordering == None:
+            if (base_point != None and base_point != self.cp.surface.base_point):
+                print("If a base point not equal to the monodromy point is specified, a corresponding sheet ordering must be given")
+                return
+            elif starting_sheet != 0:
+                y0 = list(self.cp.surface.base_sheets)
+                tmp = y0[starting_sheet]
+                del y0[starting_sheet]
+                starting_sheet_ordering = np.array([tmp]+y0)
+
         projection_points = [np.complex(x) for x in projection_points]
         self.starting_sheet = starting_sheet
         self.projection_points = projection_points
@@ -289,38 +301,42 @@ class CyclePainterPath:
                 #    intersections += 1 if ccw(e, intersection_point, ss) else -1
         return intersections
 
-    def apply_automorphism(self, f, fineness=200, clear=True, eps = 1e-10):
+    def apply_automorphism(self, f, fineness=200, clear=True, check_sheet=True, eps=1e-10):
         image = [f(self.get_x(t), self.get_y(t)[self.starting_sheet])[0] for t in np.arange(0, 1.+1./fineness, 1./fineness)]
         # We currently have an issue that when we use apply_automorphism, cyclepainter is using the radio sheet without thinking what sheet we need to be on
-        # to accurately represent the image of the path under the automorphism. 
+        # to accurately represent the image of the path under the automorphism.
+        # This is essentially an aesthetic change, as when saving an automorphism path will usually want to choose the sheet ordering manually, and when 
+        # apply_automorphism is ran on its own CyclePainterPath is called with build_surface=False.
         # We first check for this problem:
         # These are the starting x & y after the automorphism is applied.
-        start_x = image[0]
-        start_y = f(self.get_x(0), self.get_y(0)[self.starting_sheet])[1]
-        # This gives the mp and a complex path to the new start
-        mp_x = self.cp.surface.base_point
-        path = ComplexLine(mp_x, start_x)
-        # We now create an ordering of the fibre based on the current radio sheet s.t. the first entry correspond to y along the path. 
-        y0 = list(self.cp.surface.base_sheets)
-        tmp = y0[self.cp.radio_sheet]
-        del y0[self.cp.radio_sheet]
-        y0 = np.array([tmp] + y0)
-        # Now create the Riemann surface path
-        # Note that this method is sensitive to if the path passes close to a branch point. 
-        # If this starts to occur too regularly, adjustment will need to be made. 
-        check_path = self.cp.surface._path_factory.RiemannSurfacePath_from_complex_path(path, x0=mp_x, y0=y0)
-        comp_y = check_path.get_y(1.)
-        # Check against the range of possible y values to see if there is an issue with the sheet.
-        diff = [z-start_y for z in comp_y]
-        index = np.argmin(diff)
-        if diff[index] > eps:
-            print("Fibre values do not match up - investigate this error.")
-            return
-        elif index != 0:
-            print("Radio sheet is incorect for the automorphism - changing to the sheet corresponding to y={}".format(y0[index]))
-            print("The sheet buttons will now be out of sync.")
-            self.cp._radio_handler(list(self.cp.surface.base_sheets).index(y0[index]))
-        # If all sheet checks succeed carry on
+        if check_sheet:
+            start_x = image[0]
+            start_y = f(self.get_x(0), self.get_y(0)[self.starting_sheet])[1]
+            # This gives the mp and a complex path to the new start
+            # The is treating the complex plane a star-shaped, which isn't true when we have branch points, see later. 
+            mp_x = self.cp.surface.base_point
+            path = ComplexLine(mp_x, start_x)
+            # We now create an ordering of the fibre based on the current radio sheet s.t. the first entry correspond to y along the path. 
+            y0 = list(self.cp.surface.base_sheets)
+            tmp = y0[self.cp.radio_sheet]
+            del y0[self.cp.radio_sheet]
+            y0 = np.array([tmp] + y0)
+            # Now create the Riemann surface path
+            # Note that this method is sensitive to if the path passes close to a branch point. 
+            # If this starts to occur too regularly, adjustment will need to be made. 
+            check_path = self.cp.surface._path_factory.RiemannSurfacePath_from_complex_path(path, x0=mp_x, y0=y0)
+            comp_y = check_path.get_y(1.)
+            # Check against the range of possible y values to see if there is an issue with the sheet.
+            diff = [z-start_y for z in comp_y]
+            index = np.argmin(diff)
+            if diff[index] > eps:
+                print("Fibre values do not match up - investigate this error.")
+                return
+            elif index != 0:
+                print("Radio sheet is incorect for the automorphism - changing to the sheet corresponding to y={}".format(y0[index]))
+                print("The sheet buttons will now be out of sync.")
+                self.cp._radio_handler(list(self.cp.surface.base_sheets).index(y0[index]))
+            # If all sheet checks succeed carry on
         self.cp.path_builder.start(from_monodromy=False)
         for x in image:
             self.cp.path_builder.add(x)
@@ -595,7 +611,6 @@ class CyclePainter:
     def clear_canvas(self):
         self.ax.cla()
         self.draw_basics()
-        self.path_builder._reset()
 
     def start(self):
         # print information first
@@ -715,7 +730,7 @@ class CyclePainter:
             print('    ' + str(k))
 
     def pickle_paths(self, filename):
-        d = {name: (self.PATHS[name].projection_points, self.PATHS[name].starting_sheet) for name in self.PATHS}
+        d = {name: (self.PATHS[name].projection_points, self.PATHS[name].starting_sheet, self.PATHS[name].base_point, self.PATHS[name].starting_sheet_ordering) for name in self.PATHS}
         with open(filename, 'wb') as handle:
             pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -723,7 +738,14 @@ class CyclePainter:
         with open(filename, 'rb') as handle:
             d = pickle.load(handle)
         for name in d:
-            self.PATHS[name] = CyclePainterPath(d[name][0], d[name][1], self)
+            if len(d[name])==2:
+                # For old pickle files where some paths will not have all the information saved.
+                self.PATHS[name] = CyclePainterPath(d[name][0], d[name][1], self)
+            elif len(d[name])==4:
+                self.PATHS[name] = CyclePainterPath(d[name][0], d[name][1], self, base_point=d[name][2], starting_sheet_ordering=d[name][3])
+            else:
+                print("Pickle file not appropriate for loading paths!")
+                return
 
     def add_point(self, x):
         if self.path_builder.state == 'on':
