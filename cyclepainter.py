@@ -319,7 +319,7 @@ class CyclePainterPath:
         elif index != 0:
             print("Radio sheet is incorect for the automorphism - changing to the sheet corresponding to y={}".format(y0[index]))
             print("The sheet buttons will now be out of sync.")
-            self.cp._radio_handler(list(self.cp.base_sheets).index(y0[index]))
+            self.cp._radio_handler(list(self.cp.surface.base_sheets).index(y0[index]))
         # If all sheet checks succeed carry on
         self.cp.path_builder.start(from_monodromy=False)
         for x in image:
