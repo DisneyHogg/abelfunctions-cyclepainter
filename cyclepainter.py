@@ -382,6 +382,11 @@ class PathBuilder:
     def _get_CyclePainterPath(self, base_point=None, starting_sheet_ordering=None):
         return CyclePainterPath(self.points, self.cp.radio_sheet, self.cp, base_point=base_point, starting_sheet_ordering=starting_sheet_ordering)
 
+    def _reset(self):
+        # Useful in clearing the canvas.
+        self.points = []
+        self.state = 'off'
+
 ####################
 ####################
 
@@ -590,6 +595,7 @@ class CyclePainter:
     def clear_canvas(self):
         self.ax.cla()
         self.draw_basics()
+        self.path_builder._reset()
 
     def start(self):
         # print information first
