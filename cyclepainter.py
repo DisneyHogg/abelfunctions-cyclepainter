@@ -306,8 +306,10 @@ class CyclePainterPath:
         del y0[self.cp.radio_sheet]
         y0 = np.array([tmp] + y0)
         # Now create the Riemann surface path
+        # Note that this method is sensitive to if the path passes close to a branch point. 
+        # If this starts to occur too regularly, adjustment will need to be made. 
         check_path = self.cp.surface._path_factory.RiemannSurfacePath_from_complex_path(path, x0=mp_x, y0=y0)
-        compy_y = check_path.get_y(1.)
+        comp_y = check_path.get_y(1.)
         # Check against the range of possible y values to see if there is an issue with the sheet.
         diff = [z-start_y for z in comp_y]
         index = np.argmin(diff)
