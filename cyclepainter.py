@@ -147,7 +147,7 @@ class CyclePainterPath:
                 print("If a base point not equal to the monodromy point is specified, a corresponding sheet ordering must be given")
                 return
             elif starting_sheet != 0:
-                y0 = list(self.cp.surface.base_sheets)
+                y0 = list(cyclepainter.surface.base_sheets)
                 tmp = y0[starting_sheet]
                 del y0[starting_sheet]
                 starting_sheet_ordering = np.array([tmp]+y0)
