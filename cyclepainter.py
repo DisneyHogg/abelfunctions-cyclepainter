@@ -138,6 +138,8 @@ class BranchPoint:
 class CyclePainterPath:
 
     def __init__(self, projection_points, starting_sheet, cyclepainter, build_surface=True, color_sheets=True, starting_sheet_ordering=None, base_point=None):
+        # We have the issue that if we are not based at the monodromy point, we need to check for consistency between starting_sheet and starting_sheet_ordering
+        #if (base_point != None and base_point != )
         projection_points = [np.complex(x) for x in projection_points]
         self.starting_sheet = starting_sheet
         self.projection_points = projection_points
@@ -151,7 +153,7 @@ class CyclePainterPath:
             self.surface_path = self.cp.surface._path_factory.RiemannSurfacePath_from_complex_path(path, x0=base_point, y0=starting_sheet_ordering)
             # Previously, when trying to save a path that doesn't go through the monodromy point, e.g. one obtained by applying an automorphism
             # the above line fails. This is as in abelfunctions it was expecting the path to start at the monodromy point, and for the sheet 
-            # specification to corresponding to the preimage of the monodromy point. 
+            # specification to correspond to the preimages of the monodromy point. 
             # To fix this we allow one to edit these in the specific case that the curve does not start from mp.
             # See riemann_surface_path_factory.py in abelfunctions for more detail. 
         else:
@@ -287,8 +289,36 @@ class CyclePainterPath:
                 #    intersections += 1 if ccw(e, intersection_point, ss) else -1
         return intersections
 
-    def apply_automorphism(self, f, fineness=200, clear=True):
+    def apply_automorphism(self, f, fineness=200, clear=True, eps = 1e-10):
         image = [f(self.get_x(t), self.get_y(t)[self.starting_sheet])[0] for t in np.arange(0, 1.+1./fineness, 1./fineness)]
+        # We currently have an issue that when we use apply_automorphism, cyclepainter is using the radio sheet without thinking what sheet we need to be on
+        # to accurately represent the image of the path under the automorphism. 
+        # We first check for this problem:
+        # These are the starting x & y after the automorphism is applied.
+        start_x = image[0]
+        start_y = f(self.get_x(0), self.get_y(0)[self.starting_sheet])[1]
+        # This gives the mp and a complex path to the new start
+        mp_x = self.cp.surface.base_point
+        path = ComplexLine(mp_x, start_x)
+        # We now create an ordering of the fibre based on the current radio sheet s.t. the first entry correspond to y along the path. 
+        y0 = list(self.cp.surface.base_sheets)
+        tmp = y0[self.cp.radio_sheet]
+        del y0[self.cp.radio_sheet]
+        y0 = np.array([tmp] + y0)
+        # Now create the Riemann surface path
+        check_path = self.cp.surface._path_factory.RiemannSurfacePath_from_complex_path(path, x0=mp_x, y0=y0)
+        compy_y = check_path.get_y(1.)
+        # Check against the range of possible y values to see if there is an issue with the sheet.
+        diff = [z-start_y for z in comp_y]
+        index = np.argmin(diff)
+        if diff[index] > eps:
+            print("Fibre values do not match up - investigate this error.")
+            return
+        elif index != 0:
+            print("Radio sheet is incorect for the automorphism - changing to the sheet corresponding to y={}".format(y0[index]))
+            print("The sheet buttons will now be out of sync.")
+            self.cp._radio_handler(list(self.cp.base_sheets).index(y0[index]))
+        # If all sheet checks succeed carry on
         self.cp.path_builder.start(from_monodromy=False)
         for x in image:
             self.cp.path_builder.add(x)
@@ -418,7 +448,8 @@ class CyclePainter:
         # As np.real/np.imag calls a method, this method must be called to get the real or imaginary part. 
         self.monodromy_point = np.complex(real_part(self.surface.base_point) + I*imag_part(self.cut_point))
         self.surface = RiemannSurface(curve, base_point=self.monodromy_point)
-
+        
+        # Note we seemingly redo this now as the surface has actually changed since. 
         bp, branch_permutations = self.surface.monodromy_group()
         self.branch_points = [BranchPoint(x, cp=self) for x in bp]
 
@@ -539,8 +570,6 @@ class CyclePainter:
         self.ax.yaxis.set_label_coords(0, 1.05)
         self.ax.set_title(self.name, family='DejaVu Sans')
 
-
-
         # add legend for the colors of sheets
         # first, some dummy plotting is necessary to get the legend
         for sheet_number, sheet_color in self.sheet_color_map.items():
@@ -616,6 +645,7 @@ class CyclePainter:
         self.pause_button.on_clicked(self.path_builder.pause)
         self.pause_button.label.set_fontsize(6)
 
+        # Typo here? For clarity this text should probably be ax_reverse, but given that pause is already drawn this might not cause issues?
         ax_pause = plt.axes([0.02, 0.65, 0.08, 0.04])
         self.pause_button = Button(ax_pause,'Reverse')
         self.pause_button.on_clicked(self.path_builder.reverse)
