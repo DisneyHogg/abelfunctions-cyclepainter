@@ -327,7 +327,7 @@ class CyclePainterPath:
             check_path = self.cp.surface._path_factory.RiemannSurfacePath_from_complex_path(path, x0=mp_x, y0=y0)
             comp_y = check_path.get_y(1.)
             # Check against the range of possible y values to see if there is an issue with the sheet.
-            diff = [z-start_y for z in comp_y]
+            diff = [np.abs(z-start_y) for z in comp_y]
             index = np.argmin(diff)
             if diff[index] > eps:
                 print("Fibre values do not match up - investigate this error.")
