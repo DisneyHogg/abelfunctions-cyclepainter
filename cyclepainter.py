@@ -142,6 +142,7 @@ class CyclePainterPath:
         self.base_point = base_point
         self.starting_sheet_ordering = starting_sheet_ordering
         # We have the issue that if we are not based at the monodromy point, we need to check for consistency between starting_sheet and starting_sheet_ordering
+        # This does now mean that when using methods such as get_y, we need to use get_y(t)[0] as opposed to get_y(t)[self.starting_sheet]
         if starting_sheet_ordering == None:
             if (base_point != None and base_point != self.cp.surface.base_point):
                 print("If a base point not equal to the monodromy point is specified, a corresponding sheet ordering must be given")
@@ -229,7 +230,8 @@ class CyclePainterPath:
 
     def xy_path(self, n):
         # get n points equally spaced across the path
-        return [(self.get_x(t), self.get_y(t)[self.starting_sheet]) for t in np.arange(0.0, 1.0 + 1.0/n, 1.0/n)]
+        sheet = 0 #self.starting_sheet
+        return [(self.get_x(t), self.get_y(t)[sheet]) for t in np.arange(0.0, 1.0 + 1.0/n, 1.0/n)]
 
     def is_closed(self, eps=1e-9):
         return dist((self.get_x(0), self.get_y(0)[self.starting_sheet]), (self.get_x(1), self.get_y(1)[self.starting_sheet])) < eps
@@ -290,11 +292,20 @@ class CyclePainterPath:
             # THE FOLLOWING IF STATEMENT IS FLAWED, AND THE CORRESPONDING CODE SECTION IS MESSY
             # THIS REFLECTS DIFFICULTY GETTING A RELIABLE METHOD. 
             # if bool(ccw(intersection_point,s,ss) == ccw(intersection_point,e,ee) and ccw(intersection_point,s,ee) != ccw(intersection_point,e,ss)):
-            w = np.array([0,0,1,1])
-            if not (np.prod(np.diff(w[np.argsort([arctan2(*tuple(np.subtract(v,intersection_point))) for v in [e,s,ee,ss]])]))==0):
+            #w = np.array([0,0,1,1])
+            vec = np.array([(0,-1),(1,0),(0,1),(-1,0)])
+            order = np.argsort([arctan2(*tuple(np.subtract(v,intersection_point)[::-1])) for v in [e,s,ee,ss]])
+            vs = vec[np.where(order==1)[0][0]]
+            vss = vec[np.where(order==3)[0][0]]
+            ve = vec[np.where(order==0)[0][0]]
+            vee = vec[np.where(order==2)[0][0]]
+            intersections += (vs[0]*vss[1]-vs[1]*vss[0]+ve[0]*vee[1]-ve[1]*vee[0])//2
+            #if not (np.prod(np.diff(w[order]))==0):
                 #intersections += 1 if ccw(e,intersection_point,ss) else -1
-                # I DON'T CURRENTLY UNDERSTAND THE BEST WAY TO SIGN THIS INTERACTION, DISCUSS. 
-                intersections += 1 if ccw(intersection_point,s,ss) else -1
+                # I DON'T CURRENTLY UNDERSTAND THE BEST WAY TO SIGN THIS INTERACTION, DISCUSS.
+                # Valid by Mean Value Theorem?
+                #intersections += 1 if ccw((0.,0.),tuple(np.subtract(s,e)),tuple(np.subtract(ss,ee))) else -1
+                #intersections += 1 if ccw(intersection_point,s,ss) else -1
                 # HERE FOLLOWS THE ORIGINAL METHOD FOR COUNTING THE INTERSECTION AT THE MONODROMY POINT.
                 #if intersect(e, s, ee, ss):
                 #    intersection_point = intersection(e, s, ee, ss)
@@ -302,7 +313,8 @@ class CyclePainterPath:
         return intersections
 
     def apply_automorphism(self, f, fineness=200, clear=True, check_sheet=True, eps=1e-10):
-        image = [f(self.get_x(t), self.get_y(t)[self.starting_sheet])[0] for t in np.arange(0, 1.+1./fineness, 1./fineness)]
+        sheet = 0 #self.starting_sheet
+        image = [f(self.get_x(t), self.get_y(t)[sheet])[0] for t in np.arange(0, 1.+1./fineness, 1./fineness)]
         # We currently have an issue that when we use apply_automorphism, cyclepainter is using the radio sheet without thinking what sheet we need to be on
         # to accurately represent the image of the path under the automorphism.
         # This is essentially an aesthetic change, as when saving an automorphism path will usually want to choose the sheet ordering manually, and when 
@@ -311,7 +323,7 @@ class CyclePainterPath:
         # These are the starting x & y after the automorphism is applied.
         if check_sheet:
             start_x = image[0]
-            start_y = f(self.get_x(0), self.get_y(0)[self.starting_sheet])[1]
+            start_y = f(self.get_x(0), self.get_y(0)[sheet])[1]
             # This gives the mp and a complex path to the new start
             # The is treating the complex plane a star-shaped, which isn't true when we have branch points, see later. 
             mp_x = self.cp.surface.base_point
@@ -700,6 +712,14 @@ class CyclePainter:
         del self.PATHS[path_name]
         print('Success: The path with name "{:s}" has been deleted.'.format(path_name))
 
+    def rename_path(self, path_name, new_name):
+        if new_name in self.PATHS:
+            print('Fail: The path with name "{:s}" already exists.'.format(path_name))
+            return
+        self.PATHS[new_name] = self.get_path(path_name)
+        self.delete_path(path_name)
+        print('It has been renamed as "{}".'.format(new_name))
+
     def get_path(self, path_name):
         if not path_name in self.PATHS:
             print('Fail: The path with name "{:s}" does not exist.'.format(path_name))
@@ -729,8 +749,11 @@ class CyclePainter:
         for k in self.PATHS:
             print('    ' + str(k))
 
-    def pickle_paths(self, filename):
-        d = {name: (self.PATHS[name].projection_points, self.PATHS[name].starting_sheet, self.PATHS[name].base_point, self.PATHS[name].starting_sheet_ordering) for name in self.PATHS}
+    def pickle_paths(self, filename, legacy=False):
+        if legacy:
+            d = {name: (self.PATHS[name].projection_points, self.PATHS[name].starting_sheet) for name in self.PATHS}
+        else:
+            d = {name: (self.PATHS[name].projection_points, self.PATHS[name].starting_sheet, self.PATHS[name].base_point, self.PATHS[name].starting_sheet_ordering) for name in self.PATHS}
         with open(filename, 'wb') as handle:
             pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
